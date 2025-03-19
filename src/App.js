@@ -283,6 +283,9 @@ const App = () => {
 
         <section className="history-section">
           <h2 className="section-title">Histórico de Cálculos</h2>
+          <p className="section-subtitle">Pode colocar comentários nos cálculos.</p>
+          <p className="section-subtitle">Veja seus cálculos anteriores, já fez {history.length} cálculos.</p>
+          
           {history.length > 0 ? (
             <ul className="history-list">
               {history.map((item) => (
