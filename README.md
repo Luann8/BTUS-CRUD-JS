@@ -39,8 +39,7 @@ Aqui está um exemplo do trecho relevante do `package.json`:
   }
 }
 ```
-### Dependências no `package.json`
-Comandos de inicialização
+### Comandos de inicialização
 ```
 npm install
 
