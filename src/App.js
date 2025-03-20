@@ -11,20 +11,44 @@ const App = () => {
   const [appliance, setAppliance] = useState('');
   const [calculatedBTU, setCalculatedBTU] = useState(null);
   const [obs, setObs] = useState('');
-  const [history, setHistory] = useState(() => {
-    // Carregar histórico do localStorage ao iniciar
-    const savedHistory = localStorage.getItem('btuHistory');
-    return savedHistory ? JSON.parse(savedHistory) : [];
-  });
+  const [history, setHistory] = useState([]);
   const [showRegister, setShowRegister] = useState(false);
   const [editId, setEditId] = useState(null);
   const [editAction, setEditAction] = useState('');
   const [editObs, setEditObs] = useState('');
 
-  // Salvar no localStorage sempre que o histórico mudar
+  const fetchHistory = async () => {
+    try {
+      const response = await fetch('/history', {
+        method: 'GET',
+        credentials: 'include',
+      });
+      const data = await response.json();
+      if (response.ok) {
+        const formattedHistory = (data.history || []).map(item => ({
+          ...item,
+          hidden: false
+        }));
+        setHistory(formattedHistory);
+      } else {
+        setHistory([]);
+        console.error('Erro ao buscar histórico:', data.message);
+      }
+    } catch (err) {
+      console.error('Erro de conexão ao buscar histórico:', err);
+      setHistory([]);
+    }
+  };
+
   useEffect(() => {
-    localStorage.setItem('btuHistory', JSON.stringify(history));
-  }, [history]);
+    fetchHistory();
+  }, []);
+
+  useEffect(() => {
+    if (loggedIn) {
+      fetchHistory();
+    }
+  }, [loggedIn]);
 
   const calculateBTU = (area, people, appliance) => {
     return area * 600 + people * 500 + appliance * 1500;
@@ -40,27 +64,42 @@ const App = () => {
     setCalculatedBTU(btu);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (calculatedBTU === null) {
       alert('Por favor, calcule um BTU antes de salvar.');
       return;
     }
 
     const action = `${user.username} calculou BTU: ${calculatedBTU} (Área: ${area}m², Pessoas: ${people}, Aparelhos: ${appliance})`;
-    const newEntry = {
-      id: Date.now(),
-      action,
-      obs,
-      timestamp: new Date().toISOString(),
-      visible: true
-    };
-    
-    setHistory([newEntry, ...history]);
-    setCalculatedBTU(null);
-    setArea('');
-    setPeople('');
-    setAppliance('');
-    setObs('');
+    try {
+      const response = await fetch('/history', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ action, obs }),
+      });
+      const data = await response.json();
+
+      if (response.ok) {
+        setHistory([{
+          id: data.id,
+          action,
+          obs,
+          timestamp: new Date().toISOString(),
+          hidden: false
+        }, ...history]);
+        setCalculatedBTU(null);
+        setArea('');
+        setPeople('');
+        setAppliance('');
+        setObs('');
+      } else {
+        alert(data.message || 'Erro ao salvar o cálculo.');
+      }
+    } catch (err) {
+      console.error('Erro ao salvar cálculo:', err);
+      alert('Erro ao conectar ao servidor.');
+    }
   };
 
   const handleEdit = (id, action, obs) => {
@@ -69,32 +108,56 @@ const App = () => {
     setEditObs(obs || '');
   };
 
-  const handleUpdate = (e) => {
+  const handleUpdate = async (e) => {
     e.preventDefault();
     if (!editAction) {
       alert('A ação não pode estar vazia.');
       return;
     }
 
-    const newEntry = {
-      id: Date.now(),
+    // Oculta o item original e cria uma cópia
+    const newItem = {
+      id: Date.now(), // Novo ID temporário (idealmente deveria vir do backend)
       action: editAction,
       obs: editObs,
       timestamp: new Date().toISOString(),
-      visible: true
+      hidden: false
     };
 
-    setHistory([newEntry, ...history]);
-    setEditId(null);
-    setEditAction('');
-    setEditObs('');
+    try {
+      // Atualiza no backend
+      const response = await fetch('/history', {
+        method: 'POST', // Usamos POST para criar um novo item
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ action: editAction, obs: editObs }),
+      });
+      const data = await response.json();
+
+      if (response.ok) {
+        setHistory([
+          { ...newItem, id: data.id }, // Adiciona o novo item com o ID do backend
+          ...history.map(item =>
+            item.id === editId ? { ...item, hidden: true } : item
+          )
+        ]);
+        setEditId(null);
+        setEditAction('');
+        setEditObs('');
+      } else {
+        alert(data.message || 'Erro ao criar novo item no histórico.');
+      }
+    } catch (err) {
+      console.error('Erro ao criar novo item no histórico:', err);
+      alert('Erro ao conectar ao servidor.');
+    }
   };
 
-  const handleDelete = (id) => {
+  const handleHide = (id) => {
     if (!window.confirm('Tem certeza que deseja ocultar este cálculo?')) return;
     
-    setHistory(history.map(item => 
-      item.id === id ? { ...item, visible: false } : item
+    setHistory(history.map(item =>
+      item.id === id ? { ...item, hidden: true } : item
     ));
   };
 
@@ -103,11 +166,20 @@ const App = () => {
     setUser(userData);
   };
 
-  const handleLogout = () => {
-    setLoggedIn(false);
-    setUser(null);
-    setCalculatedBTU(null);
-    // Não limpamos o history aqui para mantê-lo
+  const handleLogout = async () => {
+    try {
+      await fetch('/logout', {
+        method: 'POST',
+        credentials: 'include',
+      });
+      setLoggedIn(false);
+      setUser(null);
+      setCalculatedBTU(null);
+      setHistory([]);
+    } catch (err) {
+      console.error('Erro ao fazer logout:', err);
+      alert('Erro ao desconectar do servidor.');
+    }
   };
 
   if (!loggedIn) {
@@ -220,56 +292,61 @@ const App = () => {
 
         <section className="history-section">
           <h2 className="section-title">Histórico de Cálculos</h2>
+          <p className="section-subtitle">Ao editar será salvo a data da ultima edição.</p>
+          <p className="section-subtitle">
+            Veja seus cálculos anteriores, já fez {history.filter(item => !item.hidden).length} cálculos visíveis.
+          </p>
+          
           {history.length > 0 ? (
             <ul className="history-list">
-              {history
-                .filter(item => item.visible)
-                .map((item) => (
-                <li key={item.id}>
-                  {editId === item.id ? (
-                    <form onSubmit={handleUpdate} className="edit-form">
-                      <input
-                        type="text"
-                        value={editAction}
-                        onChange={(e) => setEditAction(e.target.value)}
-                        required
-                        placeholder="Descrição do cálculo"
-                      />
-                      <input
-                        type="text"
-                        value={editObs}
-                        onChange={(e) => setEditObs(e.target.value)}
-                        placeholder="Observação (opcional)"
-                      />
-                      <button type="submit" className="edit-save-btn">Salvar</button>
-                      <button type="button" onClick={() => setEditId(null)} className="edit-cancel-btn">Cancelar</button>
-                    </form>
-                  ) : (
-                    <>
-                      <div className="history-item-content">
-                        <p>{item.action}</p>
-                        {item.obs && <span className="obs">Obs: {item.obs}</span>}
-                        <small>{new Date(item.timestamp).toLocaleString()}</small>
-                      </div>
-                      <div className="history-item-actions">
-                        <button
-                          onClick={() => handleEdit(item.id, item.action, item.obs)}
-                          className="edit-btn"
-                          title="Editar"
-                        >
-                          ✎
-                        </button>
-                        <button
-                          onClick={() => handleDelete(item.id)}
-                          className="delete-btn"
-                          title="Ocultar"
-                        >
-                          ✗
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </li>
+              {history.map((item) => (
+                !item.hidden ? (
+                  <li key={item.id}>
+                    {editId === item.id ? (
+                      <form onSubmit={handleUpdate} className="edit-form">
+                        <input
+                          type="text"
+                          value={editAction}
+                          onChange={(e) => setEditAction(e.target.value)}
+                          required
+                          placeholder="Descrição do cálculo"
+                        />
+                        <input
+                          type="text"
+                          value={editObs}
+                          onChange={(e) => setEditObs(e.target.value)}
+                          placeholder="Observação (opcional)"
+                        />
+                        <button type="submit" className="edit-save-btn">Salvar</button>
+                        <button type="button" onClick={() => setEditId(null)} className="edit-cancel-btn">Cancelar</button>
+                      </form>
+                    ) : (
+                      <>
+                        <div className="history-item-content">
+                          <p>{item.action}</p>
+                          {item.obs && <span className="obs">Obs: {item.obs}</span>}
+                          <small>{new Date(item.timestamp).toLocaleString()}</small>
+                        </div>
+                        <div className="history-item-actions">
+                          <button
+                            onClick={() => handleEdit(item.id, item.action, item.obs)}
+                            className="edit-btn"
+                            title="Editar"
+                          >
+                            ✎
+                          </button>
+                          <button
+                            onClick={() => handleHide(item.id)}
+                            className="delete-btn"
+                            title="Ocultar"
+                          >
+                            ✗
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </li>
+                ) : null // Não renderiza nada para itens ocultos
               ))}
             </ul>
           ) : (
@@ -279,7 +356,7 @@ const App = () => {
       </main>
 
       <footer className="app-footer">
-        <pa>© 2025 Calculadora de BTUs. Todos os direitos reservados.</pa>
+        <p>© 2025 Calculadora de BTUs. Todos os direitos reservados.</p>
       </footer>
     </div>
   );
