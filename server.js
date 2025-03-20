@@ -28,7 +28,7 @@ app.use((req, res, next) => {
 
 db.serialize(() => {
   db.run(`CREATE TABLE IF NOT EXISTS Users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL UNIQUE, email TEXT NOT NULL UNIQUE, password TEXT NOT NULL)`);
-  db.run(`CREATE TABLE IF NOT EXISTS History (id INTEGER PRIMARY KEY AUTOINCREMENT, userId INTEGER, action TEXT NOT NULL, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (userId) REFERENCES Users(id))`);
+  db.run(`CREATE TABLE IF NOT EXISTS History (id INTEGER PRIMARY KEY AUTOINCREMENT, userId INTEGER, action TEXT NOT NULL, obs TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (userId) REFERENCES Users(id))`);
 });
 
 const validateInput = (username, email, password) => {
@@ -76,10 +76,10 @@ app.post('/login', (req, res) => {
 });
 
 app.post('/history', isAuthenticated, (req, res) => {
-  const { action } = req.body;
+  const { action, obs } = req.body;
   if (!action) return res.status(400).json({ message: 'Ação é obrigatória' });
 
-  db.run(`INSERT INTO History (userId, action) VALUES (?, ?)`, [req.session.userId, action], function (err) {
+  db.run(`INSERT INTO History (userId, action, obs) VALUES (?, ?, ?)`, [req.session.userId, action, obs || ''], function (err) {
     if (err) return res.status(500).json({ message: 'Erro ao adicionar ao histórico' });
     console.log(`Ação adicionada para userId ${req.session.userId}: ${action}`);
     res.status(201).json({ message: 'Ação adicionada ao histórico', id: this.lastID });
@@ -87,10 +87,39 @@ app.post('/history', isAuthenticated, (req, res) => {
 });
 
 app.get('/history', isAuthenticated, (req, res) => {
-  db.all(`SELECT id, action, timestamp FROM History WHERE userId = ? ORDER BY timestamp DESC`, [req.session.userId], (err, rows) => {
+  db.all(`SELECT id, action, obs, timestamp FROM History WHERE userId = ? ORDER BY timestamp DESC`, [req.session.userId], (err, rows) => {
     if (err) return res.status(500).json({ message: 'Erro ao buscar histórico' });
     console.log(`Histórico retornado para userId ${req.session.userId}:`, rows);
     res.status(200).json({ message: 'Histórico recuperado com sucesso', history: rows });
+  });
+});
+
+// Novo endpoint: Atualizar histórico
+app.put('/history/:id', isAuthenticated, (req, res) => {
+  const { id } = req.params;
+  const { action, obs } = req.body;
+
+  if (!action) return res.status(400).json({ message: 'Ação é obrigatória' });
+
+  db.run(`UPDATE History SET action = ?, obs = ? WHERE id = ? AND userId = ?`, [action, obs || '', id, req.session.userId], function (err) {
+    if (err) return res.status(500).json({ message: 'Erro ao atualizar histórico' });
+    if (this.changes === 0) return res.status(404).json({ message: 'Item não encontrado ou não pertence ao usuário' });
+
+    console.log(`Histórico atualizado para userId ${req.session.userId}, id ${id}`);
+    res.status(200).json({ message: 'Histórico atualizado com sucesso' });
+  });
+});
+
+// Novo endpoint: Deletar histórico
+app.delete('/history/:id', isAuthenticated, (req, res) => {
+  const { id } = req.params;
+
+  db.run(`DELETE FROM History WHERE id = ? AND userId = ?`, [id, req.session.userId], function (err) {
+    if (err) return res.status(500).json({ message: 'Erro ao deletar histórico' });
+    if (this.changes === 0) return res.status(404).json({ message: 'Item não encontrado ou não pertence ao usuário' });
+
+    console.log(`Histórico deletado para userId ${req.session.userId}, id ${id}`);
+    res.status(200).json({ message: 'Histórico deletado com sucesso' });
   });
 });
 
