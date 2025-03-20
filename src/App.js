@@ -25,7 +25,11 @@ const App = () => {
       });
       const data = await response.json();
       if (response.ok) {
-        setHistory(data.history || []);
+        const formattedHistory = (data.history || []).map(item => ({
+          ...item,
+          hidden: false
+        }));
+        setHistory(formattedHistory);
       } else {
         setHistory([]);
         console.error('Erro ao buscar histórico:', data.message);
@@ -77,7 +81,13 @@ const App = () => {
       const data = await response.json();
 
       if (response.ok) {
-        setHistory([{ id: data.id, action, obs, timestamp: new Date().toISOString() }, ...history]);
+        setHistory([{
+          id: data.id,
+          action,
+          obs,
+          timestamp: new Date().toISOString(),
+          hidden: false
+        }, ...history]);
         setCalculatedBTU(null);
         setArea('');
         setPeople('');
@@ -105,9 +115,19 @@ const App = () => {
       return;
     }
 
+    // Oculta o item original e cria uma cópia
+    const newItem = {
+      id: Date.now(), // Novo ID temporário (idealmente deveria vir do backend)
+      action: editAction,
+      obs: editObs,
+      timestamp: new Date().toISOString(),
+      hidden: false
+    };
+
     try {
-      const response = await fetch(`/history/${editId}`, {
-        method: 'PUT',
+      // Atualiza no backend
+      const response = await fetch('/history', {
+        method: 'POST', // Usamos POST para criar um novo item
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ action: editAction, obs: editObs }),
@@ -115,40 +135,30 @@ const App = () => {
       const data = await response.json();
 
       if (response.ok) {
-        setHistory(history.map(item =>
-          item.id === editId ? { ...item, action: editAction, obs: editObs } : item
-        ));
+        setHistory([
+          { ...newItem, id: data.id }, // Adiciona o novo item com o ID do backend
+          ...history.map(item =>
+            item.id === editId ? { ...item, hidden: true } : item
+          )
+        ]);
         setEditId(null);
         setEditAction('');
         setEditObs('');
       } else {
-        alert(data.message || 'Erro ao atualizar o histórico.');
+        alert(data.message || 'Erro ao criar novo item no histórico.');
       }
     } catch (err) {
-      console.error('Erro ao atualizar histórico:', err);
+      console.error('Erro ao criar novo item no histórico:', err);
       alert('Erro ao conectar ao servidor.');
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Tem certeza que deseja excluir este cálculo?')) return;
-
-    try {
-      const response = await fetch(`/history/${id}`, {
-        method: 'DELETE',
-        credentials: 'include',
-      });
-      const data = await response.json();
-
-      if (response.ok) {
-        setHistory(history.filter(item => item.id !== id));
-      } else {
-        alert(data.message || 'Erro ao deletar o histórico.');
-      }
-    } catch (err) {
-      console.error('Erro ao deletar histórico:', err);
-      alert('Erro ao conectar ao servidor.');
-    }
+  const handleHide = (id) => {
+    if (!window.confirm('Tem certeza que deseja ocultar este cálculo?')) return;
+    
+    setHistory(history.map(item =>
+      item.id === id ? { ...item, hidden: true } : item
+    ));
   };
 
   const handleLogin = (userData) => {
@@ -203,7 +213,6 @@ const App = () => {
             )}
           </section>
         </main>
-        {/* Removi o footer aqui */}
       </div>
     );
   }
@@ -283,57 +292,61 @@ const App = () => {
 
         <section className="history-section">
           <h2 className="section-title">Histórico de Cálculos</h2>
-          <p className="section-subtitle">Pode colocar comentários nos cálculos.</p>
-          <p className="section-subtitle">Veja seus cálculos anteriores, já fez {history.length} cálculos.</p>
+          <p className="section-subtitle">Ao editar será salvo a data da ultima edição.</p>
+          <p className="section-subtitle">
+            Veja seus cálculos anteriores, já fez {history.filter(item => !item.hidden).length} cálculos visíveis.
+          </p>
           
           {history.length > 0 ? (
             <ul className="history-list">
               {history.map((item) => (
-                <li key={item.id}>
-                  {editId === item.id ? (
-                    <form onSubmit={handleUpdate} className="edit-form">
-                      <input
-                        type="text"
-                        value={editAction}
-                        onChange={(e) => setEditAction(e.target.value)}
-                        required
-                        placeholder="Descrição do cálculo"
-                      />
-                      <input
-                        type="text"
-                        value={editObs}
-                        onChange={(e) => setEditObs(e.target.value)}
-                        placeholder="Observação (opcional)"
-                      />
-                      <button type="submit" className="edit-save-btn">Salvar</button>
-                      <button type="button" onClick={() => setEditId(null)} className="edit-cancel-btn">Cancelar</button>
-                    </form>
-                  ) : (
-                    <>
-                      <div className="history-item-content">
-                        <p>{item.action}</p>
-                        {item.obs && <span className="obs">Obs: {item.obs}</span>}
-                        <small>{new Date(item.timestamp).toLocaleString()}</small>
-                      </div>
-                      <div className="history-item-actions">
-                        <button
-                          onClick={() => handleEdit(item.id, item.action, item.obs)}
-                          className="edit-btn"
-                          title="Editar"
-                        >
-                          ✎
-                        </button>
-                        <button
-                          onClick={() => handleDelete(item.id)}
-                          className="delete-btn"
-                          title="Deletar"
-                        >
-                          ✗
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </li>
+                !item.hidden ? (
+                  <li key={item.id}>
+                    {editId === item.id ? (
+                      <form onSubmit={handleUpdate} className="edit-form">
+                        <input
+                          type="text"
+                          value={editAction}
+                          onChange={(e) => setEditAction(e.target.value)}
+                          required
+                          placeholder="Descrição do cálculo"
+                        />
+                        <input
+                          type="text"
+                          value={editObs}
+                          onChange={(e) => setEditObs(e.target.value)}
+                          placeholder="Observação (opcional)"
+                        />
+                        <button type="submit" className="edit-save-btn">Salvar</button>
+                        <button type="button" onClick={() => setEditId(null)} className="edit-cancel-btn">Cancelar</button>
+                      </form>
+                    ) : (
+                      <>
+                        <div className="history-item-content">
+                          <p>{item.action}</p>
+                          {item.obs && <span className="obs">Obs: {item.obs}</span>}
+                          <small>{new Date(item.timestamp).toLocaleString()}</small>
+                        </div>
+                        <div className="history-item-actions">
+                          <button
+                            onClick={() => handleEdit(item.id, item.action, item.obs)}
+                            className="edit-btn"
+                            title="Editar"
+                          >
+                            ✎
+                          </button>
+                          <button
+                            onClick={() => handleHide(item.id)}
+                            className="delete-btn"
+                            title="Ocultar"
+                          >
+                            ✗
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </li>
+                ) : null // Não renderiza nada para itens ocultos
               ))}
             </ul>
           ) : (
