@@ -1,0 +1,101 @@
+/* Container do formulário de registro */
+.register-container {
+    max-width: 400px;
+    margin: 0 auto;
+    padding: 30px;
+    background-color: #fff;
+    border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+  }
+  
+  /* Título do registro */
+  .register-title {
+    font-size: 24px;
+    color: #1a73e8; /* Azul consistente com o Login */
+    margin-bottom: 20px;
+    font-weight: 500;
+    text-align: center;
+  }
+  
+  /* Mensagem de erro */
+  .register-error {
+    font-size: 14px;
+    color: #ff3b30;
+    background-color: #ffebee;
+    padding: 10px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    text-align: center;
+  }
+  
+  /* Formulário de registro */
+  .register-form {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  
+  /* Grupo de campos (label + input) */
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    text-align: left;
+  }
+  
+  .form-group label {
+    font-size: 15px;
+    font-weight: 600;
+    color: #444;
+    margin-bottom: 10px;
+  }
+  
+  .form-group input {
+    padding: 12px 15px;
+    font-size: 16px;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    width: 100%;
+    background-color: #fafafa;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+  }
+  
+  .form-group input:focus {
+    border-color: #1a73e8;
+    box-shadow: 0 0 8px rgba(26, 115, 232, 0.2);
+    outline: none;
+  }
+  
+  /* Botão de registro */
+  .register-btn {
+    padding: 12px 30px;
+    font-size: 16px;
+    font-weight: 600;
+    color: #fff;
+    background-color: #34c759; /* Verde vibrante, consistente com o App.css */
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background-color 0.3s ease, transform 0.2s ease, box-shadow 0.3s ease;
+  }
+  
+  .register-btn:hover {
+    background-color: #2ba844; /* Tom mais escuro no hover */
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(52, 199, 89, 0.3);
+  }
+  
+  /* Responsividade */
+  @media (max-width: 600px) {
+    .register-container {
+      padding: 20px;
+      margin: 20px;
+    }
+  
+    .register-title {
+      font-size: 20px;
+    }
+  
+    .register-btn {
+      width: 100%;
+    }
+  }
